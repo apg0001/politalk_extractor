@@ -705,28 +705,31 @@ class Merger:
         idx = -1
 
         for i, sentence in enumerate(sentences):
-            print(i, " : ", sentence)
+            # print(i, " : ", sentence)
             if target_sentence in sentence:
                 idx = i
-                print(idx, " : 해당 문장!!!!!!")
+                # print(idx, " : 해당 문장!!!!!!")
 
         if idx == -1:
-            print("⚠ 입력된 문장이 문단 내에서 발견되지 않음.")
+            # print("⚠ 입력된 문장이 문단 내에서 발견되지 않음.")
             return False
 
         if idx == 0:
-            print("⚠ 입력된 문장이 문단의 첫 번째 문장이므로 앞 문장이 없음.")
+            # print("⚠ 입력된 문장이 문단의 첫 번째 문장이므로 앞 문장이 없음.")
             return False
         # print(idx)
         prev_sentence = sentences[idx - 1]
+        cur_sentence = sentences[idx]
 
+        # print("이전 입력: ", prev)
+        # print("이전 문장: ", prev_sentence)
+        
         # if '"' in prev_sentence:
-        if prev in prev_sentence or prev_sentence in prev:
-            print("prev_sentence: ", prev_sentence)
-            print("행합치기 대상.")
+        if any(sent in prev_sentence for sent in prev) or any(sent in cur_sentence for sent in prev):
+            # print("case_base: 행합치기 대상.")
             return True
         else:
-            print("앞문장이 큰따옴표 문장이 아니므로 행 합치기 대상이 아님.")
+            # print("case_base: 앞문장이 큰따옴표 문장이 아니므로 행 합치기 대상이 아님.")
             return False
 
     @classmethod
@@ -741,6 +744,35 @@ class Merger:
         condition_2 = not any(
             conj in part_a for conj in exceptional_conjunctions)
         return condition_1 and condition_2
+    
+    @classmethod
+    def case_same_sentence(cls, paragraph, target_sentence, prev):
+        """
+        주어진 문단에서 특정 문장의 바로 앞 문장에 큰따옴표가 포함되어 있는지 확인
+        todo : 앞문장의 발언이 동일 인물의 발언인가?
+        """
+        sentences = cls.extract_sentences(paragraph)
+        target_sentence = cls.extract_sentences(target_sentence)[0]
+        idx = -1
+
+        for i, sentence in enumerate(sentences):
+            # print(i, " : ", sentence)
+            if target_sentence in sentence:
+                idx = i
+                # print(idx, " : 해당 문장!!!!!!")
+
+        if idx == -1:
+            # print("⚠ 입력된 문장이 문단 내에서 발견되지 않음.")
+            return False
+
+        cur_sentence = sentences[idx]
+        
+        # if '"' in prev_sentence:
+        if any(sent in cur_sentence for sent in prev):
+            # print("같은 문장에 포함된 발언이므로 행합치기 대상.")
+            return True
+        else:
+            return False
 
     @classmethod
     def is_case_1(cls, part_a, part_c):  # 완료
@@ -753,7 +785,7 @@ class Merger:
             return False
 
         condition_1 = part_a in sequential_conjunctions
-        condition_2 = len(part_c.split(" ")) == 1
+        condition_2 = len(part_c.split(" ")) <= 2
         return condition_1 and condition_2
 
     @classmethod
@@ -770,7 +802,7 @@ class Merger:
             part_a.endswith("은") or part_a.endswith("는")))
         condition_2 = (("은" in part_a or "는" in part_a) and any(
             conj in part_a for conj in sequential_conjunctions) and len(part_a.split(" ")) <= 5)
-        condition_3 = len(part_c.split(" ")) == 1
+        condition_3 = len(part_c.split(" ")) <= 2
         # print(("은" in part_a or "는" in part_a), any(conj in part_a for conj in sequential_conjunctions))
         # print("이와 함께" in part_a)
         # print(condition_1, condition_2, condition_3)
@@ -788,7 +820,7 @@ class Merger:
             return False
 
         condition_1 = part_a == "그는" or part_a == "그녀는"
-        condition_2 = len(part_c.split(" ")) == 1
+        condition_2 = len(part_c.split(" ")) <= 2
         return condition_1 and condition_2
 
     @classmethod
@@ -802,7 +834,7 @@ class Merger:
             return False
         condition_1 = len(part_a.split(" ")) <= 4 and (
             part_a.endswith("은") or part_a.endswith("는"))
-        condition_2 = len(part_c.split(" ")) == 1
+        condition_2 = len(part_c.split(" ")) <= 2
 
         # todo
         # 3번째 조건 자세히 추가해야 함
@@ -819,7 +851,7 @@ class Merger:
             return False
 
         condition_1 = not part_a
-        condition_2 = len(part_c.split(" ")) == 1
+        condition_2 = len(part_c.split(" ")) <= 2
         return condition_1 and condition_2
 
     @classmethod
@@ -834,13 +866,14 @@ class Merger:
         case_5 = cls.is_case_5(part_a, part_c)
         case_base = cls.case_base(paragraph, text, prev)
         case_exceptional_conjunction = cls.is_exceptional_conjunction(part_a)
+        case_same_sentence = cls.case_same_sentence(paragraph, text, prev)
 
-        print(case_1, case_2, case_3, case_4, case_5,
-              case_base, case_exceptional_conjunction)
-        print((case_1 or case_2 or case_3 or case_4 or case_5)
-              and case_base and case_exceptional_conjunction, text, "\n================================================================")
+        # print(case_1, case_2, case_3, case_4, case_5,
+        #       case_base, case_exceptional_conjunction)
+        # print((case_1 or case_2 or case_3 or case_4 or case_5)
+        #       and case_base and case_exceptional_conjunction, text, "\n================================================================")
 
-        return (case_1 or case_2 or case_3 or case_4 or case_5) and case_base and case_exceptional_conjunction
+        return ((case_1 or case_2 or case_3 or case_4 or case_5) and case_base and case_exceptional_conjunction) or case_same_sentence
 
 
 def extract_and_clean_quotes(text):

@@ -7,6 +7,7 @@ from text_manager import *
 from extract_purpose import extract_purpose
 # from extract_topic import extract_topic
 from extract_topic_title_and_summary import extract_topic
+from modify_title import Modifier
 
 
 def format_remaining_time(remaining_seconds):
@@ -119,13 +120,13 @@ def extract_text_from_csv(csv_file, progress_bar, progress_label):
         for sentence in sentences:
             _, clean_sentence = extract_and_clean_quotes(sentence)
             candidate_speakers = merge_tokens(extract_speaker(clean_sentence))
-            print(candidate_speakers)
+            # print(candidate_speakers)
 
             speakers = []
 
             # 단문이면 바로 추가
             if len(sentences) == 1:
-                print(f"[단문] 문장 추가: {sentence}")
+                # print(f"[단문] 문장 추가: {sentence}")
                 add_flag = True
             else:
                 # 조사 판별: '은', '는'만 통과
@@ -135,13 +136,14 @@ def extract_text_from_csv(csv_file, progress_bar, progress_label):
 
                 # 성이 다른 경우 + 중문일 경우 제거
                 if speakers:
-                    print(f"발언자: {speakers}\n문장: {sentence}")
+                    # print(f"발언자: {speakers}\n문장: {sentence}")
                     add_flag = any(speaker.startswith(
                         row['이름'][0]) for speaker in speakers)
                     if not add_flag:
-                        print(f"성 불일치: {sentence}")
+                        # print(f"[추가 안함]성 불일치: {sentence}")
+                        continue
                 else:
-                    print(f"발언자 없음 or 조사 불일치: {sentence}")
+                    # print(f"[추가]발언자 없음 or 조사 불일치: {sentence}")
                     add_flag = True  # 주어 없으면 그대로 추가
 
             if not add_flag:
@@ -153,7 +155,8 @@ def extract_text_from_csv(csv_file, progress_bar, progress_label):
                 "신문사": to_string(row['신문사']),
                 "기사 제목": to_string(row['제목']),
                 "문단": to_string(row['발췌문단']),
-                "문장": sentence,
+                # "문장": sentence,
+                "문장": to_string(row['발췌문장']),
                 "큰따옴표 발언": extract_quotes(sentence, to_string(row['이름']))
             }
 
@@ -211,23 +214,23 @@ def merge_data(data, progress_bar, progress_label):
                 merged_data.append(entry)
 
             # 유형 3-4
-            elif entry["문장"].startswith(("이에", "이에 대해", "이를 두고")):
-                entry["문장"] = data[i-1]["문장"]
-                merged_data.append(entry)
+            # elif entry["문장"].startswith(("이에", "이에 대해", "이를 두고")):
+            #     entry["문장"] = data[i-1]["문장"]
+            #     merged_data.append(entry)
 
             # elif prev_title == entry["기사 제목"] and filter_sentences_by_name(entry["문장"], keywords):
             elif (merged_data[-1]["기사 제목"] == entry["기사 제목"]) and \
                 (merged_data[-1]["발언자 성명 및 직책"] == entry["발언자 성명 및 직책"]) and \
                 (merged_data[-1]["날짜"] == entry["날짜"]) and \
                 (merged_data[-1]["신문사"] == entry["신문사"]) and \
-                    (Merger.check_cases(entry["문장"], entry["문단"], data[i-1]["큰따옴표 발언"])):
+                    (Merger.check_cases(entry["문장"], entry["문단"], data[i-1]["큰따옴표 발언"].split("  "))):
 
-                merged_data[-1]['문장'] += entry['문장']
+                # merged_data[-1]['문장'] += entry['문장']
                 # 병합 조건이면 가장 마지막 데이터에 큰따옴표 발언 추가
                 if entry["큰따옴표 발언"] not in merged_data[-1]["큰따옴표 발언"]:
                     merged_data[-1]["큰따옴표 발언"] += ("  " + entry["큰따옴표 발언"])
-                    print("merged! : " +
-                          entry["큰따옴표 발언"] + " : " + entry["날짜"], "\n================================================================")
+                    # print("merged! : " +
+                    #       entry["큰따옴표 발언"] + " : " + entry["날짜"], "\n================================================================")
                 # 병합할 때 문단이 다르다면 문단도 합치기
                 if entry["문단"] != merged_data[-1]["문단"]:
                     merged_data[-1]["문단"] += entry["문단"]
@@ -297,21 +300,21 @@ def remove_duplicates(data, progress_bar, progress_label):
                         if normalized_sentences[idx_new] == existing_normalized[idx_exist] or calculate_similarity(normalized_sentences[idx_new], existing_normalized[idx_exist]):
                             # 더 짧은 쪽에서 삭제
                             if len(normalized_sentences) < len(existing_normalized):
-                                print(
-                                    f"[{i}] '{original_sentences[idx_new]}' 제거 (new)")
-                                print(
-                                    f"비교대상: {existing_sentences[idx_exist]}"
-                                )
+                                # print(
+                                #     f"[{i}] '{original_sentences[idx_new]}' 제거 (new)")
+                                # print(
+                                #     f"비교대상: {existing_sentences[idx_exist]}"
+                                # )
                                 del original_sentences[idx_new]
                                 del normalized_sentences[idx_new]
                                 matched = True
                                 break  # 삭제 후 현재 idx_new로 계속
                             else:
-                                print(
-                                    f"[{i}] '{existing_sentences[idx_exist]}' 제거 (existing)")
-                                print(
-                                    f"비교대상: {original_sentences[idx_new]}"
-                                )
+                                # print(
+                                #     f"[{i}] '{existing_sentences[idx_exist]}' 제거 (existing)")
+                                # print(
+                                #     f"비교대상: {original_sentences[idx_new]}"
+                                # )
                                 del existing_sentences[idx_exist]
                                 del existing_normalized[idx_exist]
                                 # ✅ 기존 entry도 업데이트
@@ -485,7 +488,7 @@ def save_data_to_csv(data, csv_file, progress_bar=None, progress_label=None):
                 entry["발언자 성명 및 직책"], entry["기사 제목"], entry["문장"], entry["문단"], prev_purpose)
             # 주제 추출 부분은 필요에 따라 활성화하세요
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언자 성명 및 직책"])
-            entry["주제"] = "test"
+            entry["주제"] = Modifier.modify_title(entry["기사 제목"])
 
             # 진행 상태 표시
             if progress_bar is not None and progress_label is not None:

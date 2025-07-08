@@ -8,8 +8,12 @@ import openpyxl
 from text_manager import *
 from extract_purpose import extract_purpose
 # from extract_purpose_summary import extract_purpose
-from extract_topic_title_and_summary import extract_topic
+# from extract_topic_title_and_summary import extract_topic
+from modify_title import Modifier, test
+from extract_topic_logic import extract_topic
 import datetime
+
+temp_title = []
 
 
 def format_remaining_time(remaining_seconds):
@@ -49,13 +53,13 @@ def extract_text_from_csv(csv_file):
         for sentence in sentences:
             _, clean_sentence = extract_and_clean_quotes(sentence)
             candidate_speakers = merge_tokens(extract_speaker(clean_sentence))
-            print(candidate_speakers)
+            # print(candidate_speakers)
 
             speakers = []
 
             # 단문이면 바로 추가
             if len(sentences) == 1:
-                print(f"[단문] 문장 추가: {sentence}")
+                # print(f"[단문] 문장 추가: {sentence}")
                 add_flag = True
             else:
                 # 조사 판별: '은', '는'만 통과
@@ -65,13 +69,14 @@ def extract_text_from_csv(csv_file):
 
                 # 성이 다른 경우 + 중문일 경우 제거
                 if speakers:
-                    print(f"발언자: {speakers}\n문장: {sentence}")
+                    # print(f"발언자: {speakers}\n문장: {sentence}")
                     add_flag = any(speaker.startswith(
                         row['이름'][0]) for speaker in speakers)
                     if not add_flag:
-                        print(f"성 불일치: {sentence}")
+                        continue
+                        # print(f"성 불일치: {sentence}")
                 else:
-                    print(f"발언자 없음 or 조사 불일치: {sentence}")
+                    # print(f"발언자 없음 or 조사 불일치: {sentence}")
                     add_flag = True  # 주어 없으면 그대로 추가
 
             if not add_flag:
@@ -83,7 +88,8 @@ def extract_text_from_csv(csv_file):
                 "신문사": to_string(row['신문사']),
                 "기사 제목": to_string(row['제목']),
                 "문단": to_string(row['발췌문단']),
-                "문장": sentence,
+                # "문장": sentence,
+                "문장": to_string(row['발췌문장']),
                 "큰따옴표 발언": extract_quotes(sentence, to_string(row['이름']))
             }
 
@@ -130,26 +136,26 @@ def merge_data(data):
                 merged_data.append(entry)
 
             # 유형 3-4
-            elif entry["문장"].startswith(("이에", "이에 대해", "이를 두고")):
-                entry["문장"] = data[i-1]["문장"]
-                merged_data.append(entry)
+            # elif entry["문장"].startswith(("이에", "이에 대해", "이를 두고")):
+            #     entry["문장"] = data[i-1]["문장"]
+            #     merged_data.append(entry)
 
             # elif prev_title == entry["기사 제목"] and filter_sentences_by_name(entry["문장"], keywords):
             elif (merged_data[-1]["기사 제목"] == entry["기사 제목"]) and \
                 (merged_data[-1]["발언자 성명 및 직책"] == entry["발언자 성명 및 직책"]) and \
                 (merged_data[-1]["날짜"] == entry["날짜"]) and \
                 (merged_data[-1]["신문사"] == entry["신문사"]) and \
-                    (Merger.check_cases(entry["문장"], entry["문단"], data[i-1]["큰따옴표 발언"])):
+                    (Merger.check_cases(entry["문장"], entry["문단"], data[i-1]["큰따옴표 발언"].split("  "))):
 
-                merged_data[-1]['문장'] += entry['문장']
+                # merged_data[-1]['문장'] += entry['문장']
                 # 병합 조건이면 가장 마지막 데이터에 큰따옴표 발언 추가ㅎ
                 if entry["큰따옴표 발언"] not in merged_data[-1]["큰따옴표 발언"]:
                     merged_data[-1]["큰따옴표 발언"] += ("  " + entry["큰따옴표 발언"])
-                    print("merged! : " + entry["큰따옴표 발언"] + " : " + entry["날짜"])
+                    # print("merged! : " + entry["큰따옴표 발언"] + " : " + entry["날짜"])
                 # 병합할 때 문단이 다르다면 문단도 합치기
                 if entry["문단"] != merged_data[-1]["문단"]:
                     merged_data[-1]["문단"] += entry["문단"]
-                    print("merged! : " + entry["큰따옴표 발언"] + " : " + entry["날짜"])
+                    # print("merged! : " + entry["큰따옴표 발언"] + " : " + entry["날짜"])
             else:
                 # 병합 조건이 아니면 그대로 추가
                 merged_data.append(entry)
@@ -285,8 +291,16 @@ def save_data_to_excel(data, excel_file):
                 prev_topic = None
             entry["발언의 목적 배경 취지"] = prev_purpose = extract_purpose(
                 entry["발언자 성명 및 직책"], entry["기사 제목"], entry["문장"], entry["문단"], prev_purpose)
+            # def extract_topic(title, body, purpose, name, prev_topic):
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언자 성명 및 직책"])
-            entry["주제"] = "test"
+            # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언의 목적 배경 취지"], entry["발언자 성명 및 직책"], prev_topic)
+            # entry["주제"] = "test"
+            # entry["주제"] = Modifier.modify_title(entry["기사 제목"])
+            entry["주제"] = test(entry["기사 제목"])
+            
+            if(entry["주제"] == Modifier.normalize_text(entry["기사 제목"])):
+                temp_title.append(entry["기사 제목"])
+
 
             row = [entry.get(header, "") for header in headers]
             sheet.append(row)
@@ -334,7 +348,10 @@ def save_data_to_csv(data, csv_file):
             entry["발언의 목적 배경 취지"] = prev_purpose = extract_purpose(
                 entry["발언자 성명 및 직책"], entry["기사 제목"], entry["문장"], entry["문단"], prev_purpose)
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언자 성명 및 직책"])
-            entry["주제"] = "test"
+            
+            # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언의 목적 배경 취지"], entry["발언자 성명 및 직책"], prev_topic)
+            # entry["주제"] = "test"
+            entry["주제"] = Modifier.modify_title(entry["기사 제목"])
 
             prev_topic = entry["주제"]
             prev_purpose = entry["발언의 목적 배경 취지"]
@@ -373,7 +390,7 @@ def process_file(csv_file, output_excel_file, output_csv_file):
         
         # 4. 엑셀로 저장
         save_data_to_excel(cleaned_data, output_excel_file)
-        save_data_to_csv(cleaned_data, output_csv_file)
+        # save_data_to_csv(cleaned_data, output_csv_file)
         
         print(f"처리 완료: {csv_file} -> {output_excel_file}")
     except Exception as e:
@@ -411,3 +428,7 @@ if __name__ == "__main__":
     output_dir = f"/Users/gichanpark/Downloads/output_{formatted_date}"  # 출력 엑셀 파일이 저장될 디렉토리
 
     process_multiple_files(directory_path, output_dir)
+    
+    # unique_title = list(set(temp_title))
+    # for title in unique_title:
+    #     print(title)

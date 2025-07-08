@@ -1,280 +1,320 @@
-from text_manager import *
-import stanza
 import re
-import torch
+from text_manager import nlp
 
-# Stanza 모델 로드
-# stanza.download('ko')  # 한국어 모델 다운로드
-# GPU 사용 가능 시 GPU로 처리
-# nlp = stanza.Pipeline('ko', use_gpu=torch.cuda.is_available())
+# 2. 토씨 또는 어미의 조정
+replace_dict = {
+    r'(\S+)에선': r'\1에서',
+    r'(\S+)에서는': r'\1에서',
+    r'(\S+을) 두곤': r'\1 두고',
+    r'(\S+을) 두고는': r'\1 두고',
+    r'(\S+에) 대해선': r'\1 대해',
+    r'(\S+에) 대해서는': r'\1 대해',
+    # 추가 패턴 계속 작성 가능
+}
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# 3. 발언문장 서두에 나오는 [이에, 이에 대해, 이같이 말하며, 반면] 등의 문구는 발언의 목적배경취지에 쓰지 않음.
+# 4. 발언문장 서두에 나오는 [이어, 그러므로, 또] 등의 행 합치기 대상인 접속사는 발언의 목적배경취지에 쓰지 않음.
+# 9. 문장 서두의 [이에, 이에 대해] 는 1안) 쓰지 않거나,  2안) 앞 문장에서 '이에 대해' 에 해당되는 내용을 찾아서 씀
+unimportant_conjunctions = [
+    # 3
+    "이에 대해",
+    "이에",
+    "이같이 말하며",
+    "반면",
+    "이를 두고",
+    
 
-# 중요한 정보
-important_deprels = {"nsubj",  # 주어
-                     "isubj",  # 간접 주어
-                     #  "dislocated",  # 이동된 주어
-                     "root",  # 루트
-                     "obj",  # 목적어
-                     "iobj",  # 간접 목적어
-                     "obl",  # oblique object
-                     "advcl",  # adverbial clause
-                     "conj",  # 연결어
-                     "compound",  # 복합어
-                     "fixed",  # 고정어
-                     "nmod",  # 관계어(명사 수식어, Nominal modifier)
-                     "acl",  # 관계절(부사절적 수식어, Adnominal clause)
-                     "aux",  # 조동사(Auxiliary)
-                     }  # 중요한 관계들
+    # 4
+    "이어",
+    "그러므로",
+    "또"]
 
-important_xpos = {"ncn+jca+jxt",
-                  }
-# 불필요한 정보
-unimportant_xpos = {"pvg+ecc",  # ~라며 등
-                    "pvg+ef+jcr",  # ~고 등
-                    "pvg+ecx+jcr",  # ~고 등
-                    "ncn+ef+jcr",  # ~이라고 등
-                    "pvg+ecx",  # ~라며 등
-                    "ncn+jxc",  # ~면서도 등
-                    }  # 불필요한 품사
+# 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
+# 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
+
+replacement_dict = {
+    # 일반 동사 표현 간소화
+    "지적했다": "지적",
+    "강조했다": "강조",
+    "반발했다": "반발",
+    "말했다": "발언",
+    "비판했다": "비판",
+    "글을 올렸다": "게시",
+    "썼다": "게시",
+    "주장했다": "주장",
+    "의심했다": "의심",
+    "캐물었다": "질문",
+    " 물었다": " 질문",
+    "단정했다": "단정",
+    "언급한 바 있다": "언급",
+    "촉구했다": "촉구",
+    "설명을 덧붙였다": "설명",
+    "문제를 제기했다": "제기",
+    "우려를 나타냈다": "우려",
+    "확인을 요청했다": "요청",
+    "지적을 가했다": "지적",
+    "언급했다": "언급",
+    "반박했다": "반박",
+    "반문했다": "반문",
+
+    # 관용적 표현 간소화
+    "입장을 밝혔다": "입장",
+    "강력히 주장했다": "주장",
+    "중요성을 강조했다": "강조",
+    "목소리를 냈다": "의견",
+    "찬성 의견을 밝혔다": "찬성",
+    "반대를 표명했다": "반대",
+    "찬사를 보냈다": "찬사",
+    "동의를 표했다": "동의",
+
+    # 결론 및 평가 표현 간소화
+    "결론을 내렸다": "결론",
+    "평가를 내렸다": "평가",
+    "확실히 했다": "확정",
+    "입장을 표명했다": "입장",
+
+    # 복합적 표현 간소화
+    "질문을 던졌다": "질문",
+    "알려진 바 있다": "알려짐",
+    "조치를 취했다": "조치",
+    "약속을 지켰다": "이행",
+    "찬성을 표명했다": "찬성",
+
+    # 긍정적 표현 간소화
+    "찬사를 보냈다": "찬사",
+    "환영을 표했다": "환영",
+    "감사를 전했다": "감사",
+    "공로를 치하했다": "치하",
+    "동의를 표했다": "동의",
+    "지지를 보냈다": "지지",
+    "격려의 말을 전했다": "격려",
+    "승인을 전했다": "승인",
+    "축하를 전했다": "축하",
+    "호평을 전했다": "호평",
+
+    # 중립적 설명 및 요청
+    "정보를 제공했다": "제공",
+    "의견을 나눴다": "의견",
+    "상황을 공유했다": "공유",
+    "해결책을 제안했다": "제안",
+    "문제를 설명했다": "설명",
+    "진행 상황을 알렸다": "보고",
+    "변화를 요구했다": "요구",
+    "의미를 전달했다": "전달",
+    "근거를 제시했다": "근거",
+    "조언을 요청했다": "조언",
+
+    # 갈등 및 비판 관련
+    "비난을 가했다": "비난",
+    "사과를 요구했다": "사과 요구",
+    "잘못을 지적했다": "지적",
+    "논란을 제기했다": "논란 제기",
+    "불신을 드러냈다": "불신",
+    "비판의 목소리를 냈다": "비판",
+    "고발을 진행했다": "고발",
+    "항의를 표했다": "항의",
+    "불만을 드러냈다": "불만",
+    "의혹을 제기했다": "의혹",
+    "결과를 발표했다": "발표",
+    "합의를 도출했다": "합의",
+    "대화를 요청했다": "요청",
+    "호소를 전했다": "호소",
+    "결정권을 주장했다": "주장",
+    "합의안을 제시했다": "제안",
+    "필요성을 강조했다": "강조",
+    "중요성을 지적했다": "지적",
+    "타협을 제안했다": "타협",
+    "문제를 제시했다": "제시",
+    "대안을 주장했다": "주장",
+    "목표를 강조했다": "강조",
+    "이점을 설명했다": "설명",
+    "문제를 고발했다": "고발",
+    "해결책을 주장했다": "주장",
+
+    # 기타 동작 표현 간소화
+    "우려를 표명했다": "우려",
+    "입장을 정리했다": "정리",
+    "입장을 조율했다": "조율",
+    "목표를 제시했다": "제시",
+    "요청을 전달했다": "요청",
+    "결과를 발표했다": "발표",
+    "합의를 도출했다": "합의",
+
+    # 기타 커스텀
+    "마이크를 했다": "마이크를 잡고 발언",
+    "마이크를 했고": "마이크를 잡고 발언",
+    "밝혔다": "밝힘",
+    "요청했다": "요청",
+    "열기도 했다": "열기도 함",
+    "제안했다": "제안",
+    "언성을 높였고": "언성을 높여 발언",
+    "라고도 했다": "대해 발언",
+    "맞았다": "맞음",
+    "제기했다": "제기",
+    "보탰다": "보탬",
+    "질문에 했다": "질문에 답변",
+    "것에 밝혔다": "것에 대해 발언",
+    "발언 했다": "발언",
+    "관련해선": "관련해서",
+    "많다 지적에": "많다는 지적에",
+    "소감문을 밝혔다": "소감문을 통해 밝힘",
+    " 고 발언": "발언",
+    "호소했다": "호소",
+    "입장문을 이라고 발언": "입장문을 통해 발언",
+    "는 내용의 기자회견": "기자회견",
+    "비난했다": "비난",
+    "덧붙였다": "덧붙임",
+    "진행 중단했다": "진행하려다가 일단 중단",
+    " 고 했다": "발언",
+    " 라고 했다": "발언",
+    "검토에 했다": "검토에 대해 발언",
+    "따져물었다": "발언",
+    "평가했다": "평가",
+    "말했지만": "발언",
+    "질의했다": "질문",
+    "역설하기도 했다": "역설함",
+    "고 목소리를 높였다": "목소리를 높여 발언",
+    " 했다": " 발언",
+    "내용의 게시": "내용의 글을 게시",
+
+    # "했다": "함",
+}
+
+# 1. 기본적으로 큰따옴표의 전 후에 있는 문구를 그대로 옮겨 쓰되 아래의 조정이 필요
+# 1. 발언자는  성+직책 or 성명+직책 or 성+호칭 or 성멍+호칭 or 대명사 등 발언문장에 표현된 그대로 옮겨 씀
+# 5. 큰따옴표 바로 뒤에 붙어있는 [며, 라며, 이라며, 고, 라고, 이라고] 등의 단어는 발언의 목적배경취지에 쓰지 않음
+# 추가. 두 개의 큰따옴표 문장 입력 시 하나의 문구만 채택
 
 
-def extract_and_clean_quotes(text):
-    """
-    텍스트에서 쌍따옴표로 묶인 문장을 추출하고 원래 문단에서 제거
-
-    Args:
-        text (str): 입력 텍스트
-
-    Returns:
-        tuple: (추출된 쌍따옴표 문장 리스트, 쌍따옴표 문장이 제거된 원래 문단)
-    """
-
+def remove_quotes(text):
+    
     text = text.replace("“", "\"")
     text = text.replace("”", "\"")
     text = text.replace("‘", "\'")
-    text = text.replace("'", "\'")
-    text = text.replace("’", " \'")
-    quotes = re.findall(r'"(.*?)"', text)
-    cleaned_text = re.sub(r'"(.*?)"', '', text).strip()
-    return quotes, cleaned_text
+    text = text.replace("’", "\'")
+    text = text.replace("\" \"", "\", \"") # 쌍따옴표 문장 두 개가 연속한 경우 처리
+
+    # 쌍따옴표 안 내용 + 바로 뒤에 붙은 한 단어(띄어쓰기 포함해서 최대 2글자 정도)까지 제거
+    pattern = r'"[^"]*"(?:\s*\S+)?'
+
+    cleaned_text = re.sub(pattern, '', text)
+    # 여러 공백을 하나로, 앞뒤 공백 제거
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    return cleaned_text
+
+# 2. 토씨 또는 어미의 조정
+# 11. [ …...  "……..." 는+명사 …......]  의 문장 구조 : 큰따옴표 문장이 바로 뒤에 나오는 명사를 수식하는 문구가 되어있는 형태
 
 
-def preprocess_text(text):
-    """
-    텍스트 전처리: 특수문자 제거 및 공백 정리
-
-    Args:
-        text (str): 입력 텍스트
-
-    Returns:
-        str: 전처리된 텍스트
-    """
-    text = re.sub(r'\([^)]*\)', '', text)  # 괄호 내용 제거
-    text = re.sub(r'[^\w\s.!?]', '', text)   # 특수문자 제거, 문장 분할용 구두점은 유지
-    text = re.sub(r'\s+', ' ', text)      # 다중 공백 정리
-    return text.strip()
-
-
-def get_summary(name, text):
-    """
-    텍스트를 요약
-    """
-    # 의존 구문 분석
+def adjust_particles_and_endings(text):
     doc = nlp(text)
     # print(doc)
-    filtered_words = []
-    quote_flag = False
-    # print(text + "\n")
+    words = []
 
-    for sentence in doc.sentences:
-        # print(sentence)
+    # 주어 + 은/는 → 주어 + 이/가 조정
+    for sent in doc.sentences:
         size = 0
         try:
-            size = len(doc.sentence.words)
+            size = len(doc.sent.words)
             # print(size)
         except:
             size = 0
-        for word in sentence.words:
-            # print(f"{word.text} : {word.deprel}")
-            # 중요한 관계에 해당하는 단어만 남김
-            if (word.deprel in important_deprels) or \
-               (word.xpos in important_xpos) or \
-               (word.deprel == "acl" and sentence.words[word.id].deprel == "obl") or \
-               (word.id >= 2 and word.deprel == "dislocated" and word.xpos == "ncn+ncn+jxt" and sentence.words[word.id-2].text == "겸") or \
-               (word.xpos == "ncn+jco" and sentence.words[word.id].text == "요구했다") or \
-               (word.id >= 2 and word.deprel == "dep" and sentence.words[word.id-2].xpos == "nq"):
-                """
-                1.
-                2.
-                3. "~ 겸" 뒤에 나오는 주어 포함(원내대표 등)
-                4. "~ 요구했다" 앞에 나오는 단어 포함
-                5.
-                """
-                # 불필요한 품사 필터링
-                if (word.xpos in unimportant_xpos) or \
-                   (word.text == name) or \
-                   (word.id >= 2 and word.xpos in ["ncn+ncn+jxt", "ncn+jtx", "ncn+ncn+jxc"] and sentence.words[word.id-2].text in [name, name[0]]) or \
-                   (word.id >= 2 and word.text == "당" and sentence.words[word.id-2].text == "같은") or \
-                   (word.id < size - 3 and word.deprel == "compound" and sentence.words[word.id].text in [name, name[0]]) or \
-                   (word.id >= 2 and word.deprel == "compound" and sentence.words[word.id-2].text in [name, name[0]]) or \
-                   (word.id >= 2 and word.text == "전" and sentence.words[word.id-2].text in [name, name[0]] and sentence.words[word.id].deprel == "dislocated") or \
-                   (word.id >= 2 and word.text == "전" and sentence.words[word.id-2].text in [name, name[0]] and sentence.words[word.id].deprel == "advcl"):
-                #    (word.text in [name, name[0]] or sentence.words[word.id-2].xpos in ["ncn+ncn+jxt", "ncn+jtx"]):
-                    """
-                    1.
-                    2.
-                    3.
-                    4. "같은" 뒤에 "당"이 나오면 제거
-                    5. 발언자 이름 앞에 수식어가 나오면 제거
-                    6. 발언자 이름 뒤에 수식어가 나오면 제거
-                    """
-                    _ = None
-                    # if (int(word.id) == 2):
-                    #     print(word)
+        for i, word in enumerate(sent.words):
+            # 기본 형태 저장
+            new_word = list(word.text)
+
+            # 조사 '은' or '는'인 경우
+            if word.upos == 'NOUN' and word.xpos in ["ncn+jxt", "ncn+ncn+jxt"] and word.text.endswith(("은", "는")):
+                if word.id < size - 3 and sent.words[word.id].text.startswith(("입장", "취지")):
+                    new_word[-1] = ""
                 else:
-                    filtered_words.append(word.text)
-                    # print(
-                    #     f"appended : {word.text} -> {' '.join(filtered_words)}")
-            # 작은 따옴표 안에 있는 내용은 살리기
-            elif word.deprel == "punct" and word.text == "\'" and quote_flag == False:
-                filtered_words.append(word.text)
-                quote_flag = True
-                # print("start quote : " + word.text)
-            elif word.deprel == "punct" and word.text == "\'" and quote_flag == True:
-                filtered_words.append(word.text)
-                quote_flag = False
-                # print("end quote : " + word.text)
-            elif quote_flag == True:
-                filtered_words.append(word.text)
-                # print("in quote : " + word.text)
+                    # '은' → '이', '는' → '가'
+                    if word.text.endswith("은"):
+                        new_word[-1] = "이"
+                    else:
+                        new_word[-1] = '가'
 
-    # 단어를 조합해 요약 문장 생성
-    summary = " ".join(filtered_words)
-    # summary = preprocess_text(summary)
-    summary = normalize_spaces_inside_single_quotes(summary)
-    # 요약 반환
-    return summary
+            new_word = "".join(new_word)  # 리스트 → 문자열
+            words.append(new_word)
+
+    adjusted_text = ' '.join(words)
+
+    # 이후 어미 교정: 정규표현식으로 치환
+    for pattern, repl in replace_dict.items():
+        adjusted_text = re.sub(pattern, repl, adjusted_text)
+
+    # 불필요한 공백 처리
+    adjusted_text = adjusted_text.replace(" .", ".")
+    adjusted_text = adjusted_text.replace(" ,", ",")
+    adjusted_text = re.sub(r'\s+', ' ', adjusted_text).strip()
+
+    return adjusted_text
+
+# 3. 발언문장 서두에 나오는 [이에, 이에 대해, 이같이 말하며, 반면] 등의 문구는 발언의 목적배경취지에 쓰지 않음.
+# 4. 발언문장 서두에 나오는 [이어, 그러므로, 또] 등의 행 합치기 대상인 접속사는 발언의 목적배경취지에 쓰지 않음.
+# 9. 문장 서두의 [이에, 이에 대해] 는 1안) 쓰지 않거나,  2안) 앞 문장에서 '이에 대해' 에 해당되는 내용을 찾아서 씀
 
 
-def extract_purpose(name, title, body1, body2, prev):
-    # '이어', '이어서', '그러면서', '그는' 등의 순접으로 이루어져 있다면 이전 행과 같은 목적, 배경, 취지로 고려
-    # if find_sequential_conjunction(body1) is not None:
-    #     return prev
+def exclude_conjunctions(text):
+    for conjunction in unimportant_conjunctions:
+        if text.startswith(conjunction):
+            # print(conjunction + " 치환")
+            text = text.replace(conjunction, "", 1)
 
-    # 1. 문장을 마침표 기준으로 나눔
-    # 2. 문장에서 쌍따옴표 문장 추출 및 제거
-    # 3. 이름(full name) 또는 성(last name)이 포함된 경우만 추출
+    return re.sub(r'\s+', ' ', text).strip()
 
-    # 1. 문장을 마침표 기준으로 나눔
-    # sentences_body1 = [sentence.strip()
-    #                    for sentence in body1.split(".") if sentence.strip()]
+# 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
+# 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
 
-    sentences_body1 = split_preserving_quotes(body1)
-    # print(f"sentences_body1: {sentences_body1}")
 
-    # 2. 이름(full name) 또는 성(last name)이 포함된 경우만
-    keywords = [name, f"{name[0]} "]
-    filtered_body1 = filter_sentences_by_name(sentences_body1, keywords)
-    # print(f"filtered_body1: {filtered_body1}")
-
-    # 3. 쌍따옴표 문장 추출
-    # extracted_data = [extract_and_clean_quotes(
-    #     filtered_sentence_body1) for filtered_sentence_body1 in filtered_body1]
-    extracted_data = [extract_and_clean_quotes(
-        filtered_sentence_body1) for filtered_sentence_body1 in sentences_body1]
-
-    # 리스트가 비어 있으면 빈 리스트로 초기화
-    if extracted_data:
-        quotes, sentences_body1_clean = zip(*extracted_data)
-        quotes, sentences_body1_clean = list(
-            quotes), list(sentences_body1_clean)
-    else:
-        quotes, sentences_body1_clean = [], []
-
-    filtered_body1_clean = "  ".join(sentences_body1_clean)
-    print(f"filtered_body1_clean: {filtered_body1_clean}")
-
-    # 요약문 생성
-    summaries_body1 = get_summary(name, filtered_body1_clean)
-
-    print(f"summaries_body1: {summaries_body1}")
-    # print(f"simplify_purpose: {simplify_purpose(summaries_body1, name)}")
-
-    return simplify_purpose(summaries_body1, name)
+def simplify_purpose(sentence, name):
     """
-    # 쌍따옴표 문장 추출
-    quotes, body1_clean = extract_and_clean_quotes(body1)
-    _, body2_clean = extract_and_clean_quotes(body2)
-
-    # 본문 1: 문단을 마침표 기준으로 나눔
-    sentences_body1 = [sentence.strip()
-                       for sentence in body1_clean.split(".") if sentence.strip()]
-
-    # 이름(full name) 또는 성(last name)이 포함된 경우만
-    keywords = [name, f"{name[0]} "]
-    filtered_body1 = filter_sentences_by_name(sentences_body1, keywords)
-    print(f"filtered_body1: {filtered_body1}")
+    문장에서 대체 가능한 표현을 간소화.
+    """
     
-    summaries_body1 = [get_summary(name, sentence)
-                       for sentence in filtered_body1]
-                       
-    return "  ".join([simplify_purpose(summary, name) for summary in summaries_body1])
-    """
+    for key, value in replacement_dict.items():
+        if key in sentence:
+            sentence = sentence.replace(key, value)
+            # print(f"{key} -> {value} : {sentence}")
+    if sentence in ["발언", "했다", "그는 발언"]:
+        sentence = f"{name}의 발언"
+    elif sentence in ["물었다"]:
+        sentence = f"{name}의 질문"
+        
+    return sentence
 
-    # body1에서 추출한 문장의 단어 수가 3개 이하인 경우 body2에서 추출한 문장을 반환
-    # if len(body1_summary.split()) <= 3:
-    #     body2_summary = get_summary(name, body2_clean)
 
-    #     # body2에서 추출한 문장의 단어 수가 3개 이하인 경우 제목에서 추출한 문장을 반환
-    #     # if len(body2_summary.split()) <= 3:
-    #     #     title_summary = get_summary(title)
-    #     #     return title_summary
+def extract_purpose(name=None, title=None, body1=None, body2=None, prev=None):
+    # 1. 기본적으로 큰따옴표의 전 후에 있는 문구를 그대로 옮겨 쓰되 아래의 조정이 필요
+    # 1. 발언자는  성+직책 or 성명+직책 or 성+호칭 or 성멍+호칭 or 대명사 등 발언문장에 표현된 그대로 옮겨 씀
+    # 5. 큰따옴표 바로 뒤에 붙어있는 [며, 라며, 이라며, 고, 라고, 이라고] 등의 단어는 발언의 목적배경취지에 쓰지 않음
+    cleaned_text = remove_quotes(body1)
+    # print("1단계: " + cleaned_text)
 
-    #     # 간소화된 표현으로 반환
-    #     return simplify_purpose(body2_summary)
+    # 2. 토씨 또는 어미의 조정
+    # 11. [ …...  "……..." 는+명사 …......]  의 문장 구조 : 큰따옴표 문장이 바로 뒤에 나오는 명사를 수식하는 문구가 되어있는 형태
+    adjusted_text = adjust_particles_and_endings(cleaned_text)
+    # print("2단계: " + adjusted_text)
 
-    # 간소화된 표현으로 반환
-    # return [simplify_purpose(summary) for summary in filtered_body1]
+    # 3. 발언문장 서두에 나오는 [이에, 이에 대해, 이같이 말하며, 반면] 등의 문구는 발언의 목적배경취지에 쓰지 않음.
+    # 4. 발언문장 서두에 나오는 [이어, 그러므로, 또] 등의 행 합치기 대상인 접속사는 발언의 목적배경취지에 쓰지 않음.
+    # 9. 문장 서두의 [이에, 이에 대해] 는 1안) 쓰지 않거나,  2안) 앞 문장에서 '이에 대해' 에 해당되는 내용을 찾아서 씀
+    excluded_text = exclude_conjunctions(adjusted_text)
+    # print("3단계: " + excluded_text)
+
+    # 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
+    # 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
+    simplified_text = simplify_purpose(excluded_text, name)
+    # print("목적배경취지: " + simplified_text)
+
+    return simplified_text
 
 
 if __name__ == "__main__":
-    # 예제 실행
-    name = "김씨"
-    title = "최강욱, 이동재 명예훼손 혐의로 또 검찰 송치"
-    body1 = '''
-김 의원은 이에 "수도권에서만 어필하면 전국 정당이 되느냐, MZ세대만 얻으면 전국 정당이 될 수 있는 거냐"라고 반문하며 "전 국민을 상대로 지지층을 확보하고 전 지역을 상대로 지지층을 확보해야 한다. ‘특정 지역만 지지받으면 된다, 특정 계층만 지지받으면 된다’라는 것은 매우 협소한 의견"이라고 지적했다
-
-'''
-    body2 = '''
-같은 당 고민정 의원은 "차장이 배석했던 회의가 끝나고 11시54분쯤 02-800-7070으로 (이종섭 전 장관에게) 전화가 가고 그 다음 국방부 장관부터 시작해서 일사천리로 일처리가 된다. 이상하지 않느냐"고 따져물었다
-    '''
-    prev = "이전 문장입니다."
-
-    # 엔티티 추출
-    result = extract_purpose(name, title, body1, body2, prev)
-    # print(result)
-
-
-# todo
-# 홑따옴표 안에 있는 내용은 살리자
-# 더불어민주당(민주당) 제거
-
-# 완료된 todo
-
-# (했고, )쉼표로 구분(발언자 구분)
-# 마이크를 ~고 했고 -> 마이크를 잡고 발언
-# 말했지만, 하지만 뒤에 ','컴마 추가해서 강제로 끊기
-# 쉼표 다음에 바로 쌍따옴표가 나온 경우 같은 발언자
-# ~ 고(라고) 헸다 -> 발언으로 정정
-# 검토에 했다 -> 검토에 대해 발언
-# "는 내용의" 제거 예외적으로
-# "~ 요구"를 수식하는 말이 있는 경우 예외적으로 추가
-# 33행 원내대표는 포함
-# 발언자를 꾸미는 직함 등 수식어는 전부 제거 ex) 같은 당 (민주당) 고민정 의원 등
-
-
-# 추가사항
-
-# 결과가 "발언" <- 만 나온 경우
-# "발언자"의 발언으로 나오도록 수정
+    name = "최강욱"
+    # text = '이에 대해 박기찬 의원은 "밥이 맛없다"라는 발언에 대해선 "밥 좀 맛있게 해라"고 지적했고, 김동욱 전 회장은 "그게 무슨소리냐"고 반문했다.'
+    # text = "박기찬 의원은 말했다"
+    text = """그는 "김은경 혁신위원회에서 제안했던, 체포동의안에 대한 민주당 스탠스, 그리고 그것에 대한 지도부 답변은 있었던 상황"이라며 "그러면 그 말을 번복하자는 말인지를 오히려 확인해 보고 싶다"고 했다"""
+    # print(text.startswith("이에 대해"))
+    # print(extract_purpose(name=name, body1=text))
+  

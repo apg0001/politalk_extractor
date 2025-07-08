@@ -250,13 +250,17 @@ def extract_topic(title, body, name, max_length=100):
     return final_keyword
 
 
-# 예시 실행
-title = "고민정 최고위원, 체포동의안 부결 주장"
-body = "고민정 최고위원은 CBS 라디오에서 체포동의안 부결 주장에 대해 언급했다."
-name = "고민정"
 
-# 요약 실행
-final_summary = extract_topic(title, body, name)
+if __name__ == "__main__":
+    # 예시 실행
+    title = ""
+    body = """
+윤석열 전 총장은 이날 국회에서 기자회견을 열고 박주선·김동철 전 의원 영입을 발표하고 "국민 통합을 상징하는 분들을 모시려 노력한 결과 호남을 대표하는 큰 정치인을 캠프에 모시기로 했다"고 밝혔다. 박·김 전 의원은 과거 현 민주당 후보로 광주(光州)에서 국회의원을 했고 각각 국회부의장과 바른미래당 원내대표를 지냈다. 정치권에선 윤 전 총장이 최근 ‘전두환 발언’ 논란으로 악화한 호남 민심 끌어안기에 나선 것 같다는 말이 나왔다. 박·김 전 의원은 "호남에서도 윤 전 총장 리더십을 인정하고 놀라울 정도의 지지를 보낼 것"이라고 했다.
+"""
+    name = "김동철"
 
-# 결과 출력
-print("최종 요약:", final_summary)
+    # 요약 실행
+    final_summary = extract_topic(title, body, name)
+
+    # 결과 출력
+    print("최종 요약:", final_summary)

@@ -235,7 +235,7 @@ def extract_topic(title, body, purpose, name, prev_topic):
         topic = get_summary(title)
         topic = replace_name(topic, name)
         topic = remove_repeated_patterns(topic)
-        topic = simplify_purpose(topic)
+        topic = simplify_purpose(topic, name)
         return topic
         
         
