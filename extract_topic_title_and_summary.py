@@ -213,7 +213,7 @@ def extract_5w1h(text):
     return final_result
 
 
-def extract_topic(title, body, name, max_length=100):
+def extract_topic(body, title = "", name = "", max_length=50):
     """
     기사에서 body만 요약하고 title과 body의 정보를 합쳐서 다시 요약하는 함수
     :param title: 기사의 제목
@@ -225,39 +225,30 @@ def extract_topic(title, body, name, max_length=100):
     # Step 1: Body만 요약
     body_summary = get_summary(body, max_length=max_length)
     body_summary = replace_name(name, body_summary)  # 이름 교체
-    # body_summary = remove_repeated_nouns(body_summary)  # 중복 제거
+    body_summary = remove_repeated_nouns(body_summary)  # 중복 제거
+    # body_summary = remove_duplicatates(body_summary)
     body_summary = remove_duplicatates(body_summary)
-    # body_summary = ' '.join(extract_keyword(body_summary))
 
-    # Step 2: 제목과 body 요약 합치기
-    # combined_text = title + " " + body_summary
+    # # Step 3: 제목과 body 요약을 합친 내용에 대해 최종 요약 진행
+    # final_summary = merge_sentences_with_kobart(title, body_summary)
 
-    # Step 3: 제목과 body 요약을 합친 내용에 대해 최종 요약 진행
-    final_summary = merge_sentences_with_kobart(title, body_summary)
+    # # 후처리: 이름 교체, 중복 제거, 목적 단순화
+    # final_summary = replace_name(name, final_summary)
+    # final_summary = remove_duplicatates(final_summary)
 
-    # 후처리: 이름 교체, 중복 제거, 목적 단순화
-    final_summary = replace_name(name, final_summary)
-    # final_summary = remove_repeated_nouns(final_summary)
-    final_summary = remove_duplicatates(final_summary)
+    # final_keyword = extract_5w1h(final_summary)
+    # final_keyword = final_summary
 
-    # final_keyword = " ".join(extract_keyword(final_summary))
-    final_keyword = extract_5w1h(final_summary)
-    final_keyword = final_summary
-
-    # print("final_summary: ", final_summary)
-    # print("final_keyword: ", final_keyword)
-
-    return final_keyword
+    # return final_keyword
+    return body_summary
 
 
 
 if __name__ == "__main__":
     # 예시 실행
-    title = ""
-    body = """
-윤석열 전 총장은 이날 국회에서 기자회견을 열고 박주선·김동철 전 의원 영입을 발표하고 "국민 통합을 상징하는 분들을 모시려 노력한 결과 호남을 대표하는 큰 정치인을 캠프에 모시기로 했다"고 밝혔다. 박·김 전 의원은 과거 현 민주당 후보로 광주(光州)에서 국회의원을 했고 각각 국회부의장과 바른미래당 원내대표를 지냈다. 정치권에선 윤 전 총장이 최근 ‘전두환 발언’ 논란으로 악화한 호남 민심 끌어안기에 나선 것 같다는 말이 나왔다. 박·김 전 의원은 "호남에서도 윤 전 총장 리더십을 인정하고 놀라울 정도의 지지를 보낼 것"이라고 했다.
-"""
-    name = "김동철"
+    title = "고민정 최고위원, 체포동의안 부결 주장"
+    body = "고민정 최고위원은 CBS 라디오에서 체포동의안 부결 주장에 대해 언급했다."
+    name = "고민정"
 
     # 요약 실행
     final_summary = extract_topic(title, body, name)

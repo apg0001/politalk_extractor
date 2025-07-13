@@ -8,9 +8,10 @@ import openpyxl
 from text_manager import *
 from extract_purpose import extract_purpose
 # from extract_purpose_summary import extract_purpose
-# from extract_topic_title_and_summary import extract_topic
+from extract_topic_title_and_summary import extract_topic
 from modify_title import Modifier, test
-from extract_topic_logic import extract_topic
+# from extract_topic_logic import extract_topic
+# from extract_topic_summary import extract_topic
 import datetime
 
 temp_title = []
@@ -296,7 +297,9 @@ def save_data_to_excel(data, excel_file):
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언의 목적 배경 취지"], entry["발언자 성명 및 직책"], prev_topic)
             # entry["주제"] = "test"
             # entry["주제"] = Modifier.modify_title(entry["기사 제목"])
-            entry["주제"] = test(entry["기사 제목"])
+            # entry["주제"] = test(entry["기사 제목"])
+            entry["주제"] = extract_topic(body = entry["문단"], name = entry["발언자 성명 및 직책"])
+            
             
             if(entry["주제"] == Modifier.normalize_text(entry["기사 제목"])):
                 temp_title.append(entry["기사 제목"])
