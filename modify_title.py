@@ -72,9 +72,10 @@ class Modifier:
         "대거": "속속",
         "맞대결": "경합",
     }
-    
+
     # 바뀌면 안되는 단어들
-    not_replace = ["검찰", "장", "당", "구", "업", "회", "사", "원", "관", "자", "법", "국민의힘", "에", "메카", "신인"]
+    not_replace = ["검찰", "장", "당", "구", "업", "회", "사",
+                   "원", "관", "자", "법", "국민의힘", "에", "메카", "신인"]
 
     @staticmethod
     def replace_quotes(text: str):
@@ -308,11 +309,11 @@ class Modifier:
                         print(f"({original}) -> {word}, {score}")
             except KeyError:
                 continue  # Word2Vec 사전에 없는 단어는 스킵
-            
+
         print(replace_word)
         for key, value in replace_word.items():
             replaced = re.sub(r'\b' + re.escape(key) +
-                    r'\b', value, replaced)
+                              r'\b', value, replaced)
 
         return replaced
 
@@ -424,21 +425,24 @@ class Paraphrase2:
         # 생성된 텍스트 반환
         return result[0]['generated_text']
 
+
 def test(text):
     model_output = Paraphrase2.generate(text)
-    normalized_model_output = Paraphrase2.generate(Modifier.normalize_text(text))
+    normalized_model_output = Paraphrase2.generate(
+        Modifier.normalize_text(text))
     rule_output = Modifier.modify_title(text)
     rule_then_model_output = Paraphrase2.generate(rule_output)
-    
+
     result = (
-                f"모델:\t\t{model_output}\n"
-                f"정규화+모델\t{normalized_model_output}\n"
-                f"사전:\t\t{rule_output}\n"
-                f"사전+모델:\t{rule_then_model_output}\n"
-                f"-------------------------------------------------------------\n"
-            )
+        f"모델:\t\t{model_output}\n"
+        f"정규화+모델\t{normalized_model_output}\n"
+        f"사전:\t\t{rule_output}\n"
+        f"사전+모델:\t{rule_then_model_output}\n"
+        f"-------------------------------------------------------------\n"
+    )
 
     return result
+
 
 if __name__ == "__main__":
     titles = [
@@ -459,7 +463,8 @@ if __name__ == "__main__":
     for t in titles:
         original = t
         model_output = Paraphrase2.generate(t)
-        normalized_model_output = Paraphrase2.generate(Modifier.normalize_text(t))
+        normalized_model_output = Paraphrase2.generate(
+            Modifier.normalize_text(t))
         rule_output = Modifier.modify_title(t)
         rule_then_model_output = Paraphrase2.generate(rule_output)
 

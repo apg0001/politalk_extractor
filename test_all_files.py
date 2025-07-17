@@ -8,10 +8,10 @@ import openpyxl
 from text_manager import *
 from extract_purpose import extract_purpose
 # from extract_purpose_summary import extract_purpose
-from extract_topic_title_and_summary import extract_topic
+# from extract_topic_title_and_summary import extract_topic
 from modify_title import Modifier, test
 # from extract_topic_logic import extract_topic
-# from extract_topic_summary import extract_topic
+from extract_topic_summary import TopicExtractor
 import datetime
 
 temp_title = []
@@ -108,7 +108,7 @@ def extract_text_from_csv(csv_file):
         # 남은 시간을 형식에 맞춰 변환하여 표시
         formatted_remaining_time = format_remaining_time(remaining_time)
 
-        print(f"[4단계 중 1단계] 파일 불러오기 및 큰따옴표 발언 추출 중 : {i + 1}/{total_rows} - 남은 예상 시간: {formatted_remaining_time}")
+        # print(f"[4단계 중 1단계] 파일 불러오기 및 큰따옴표 발언 추출 중 : {i + 1}/{total_rows} - 남은 예상 시간: {formatted_remaining_time}")
 
     return extracted_data
 
@@ -172,7 +172,7 @@ def merge_data(data):
             # 남은 시간을 형식에 맞춰 변환하여 표시
             formatted_remaining_time = format_remaining_time(remaining_time)
 
-            print(f"[4단계 중 2단계] 내용 병합 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
+            # print(f"[4단계 중 2단계] 내용 병합 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
 
     except Exception as e:
         print(f"내용 병합 중 오류 발생: {e}")
@@ -195,7 +195,8 @@ def remove_duplicates(data):
     try:
         for i, entry in enumerate(data):
             original_sentences = entry["큰따옴표 발언"].split("  ")
-            normalized_sentences = [normalize_text(s) for s in original_sentences]
+            normalized_sentences = [normalize_text(
+                s) for s in original_sentences]
 
             j = 0
             while j < len(sentence_sets):
@@ -218,7 +219,8 @@ def remove_duplicates(data):
                                 del existing_sentences[idx_exist]
                                 del existing_normalized[idx_exist]
                                 if existing_sentences:
-                                    existing_entry["큰따옴표 발언"] = "  ".join(existing_sentences)
+                                    existing_entry["큰따옴표 발언"] = "  ".join(
+                                        existing_sentences)
                                     sentence_sets[j] = {
                                         'original': existing_entry["큰따옴표 발언"],
                                         'normalized': existing_normalized
@@ -250,7 +252,7 @@ def remove_duplicates(data):
             remaining_time = time_per_step * (total_entries - (i + 1))
             formatted_remaining_time = format_remaining_time(remaining_time)
 
-            print(f"[4단계 중 3단계] 중복 제거 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
+            # print(f"[4단계 중 3단계] 중복 제거 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
 
     except Exception as e:
         print(f"중복 제거 중 오류 발생: {e}")
@@ -298,12 +300,13 @@ def save_data_to_excel(data, excel_file):
             # entry["주제"] = "test"
             # entry["주제"] = Modifier.modify_title(entry["기사 제목"])
             # entry["주제"] = test(entry["기사 제목"])
-            entry["주제"] = extract_topic(body = entry["문단"], name = entry["발언자 성명 및 직책"])
-            
-            
-            if(entry["주제"] == Modifier.normalize_text(entry["기사 제목"])):
-                temp_title.append(entry["기사 제목"])
+            # entry["주제"] = extract_topic(body = entry["문단"], name = entry["발언자 성명 및 직책"])
+            # entry["주제"] = extract_topic(text = entry["문단"])
+            extractor = TopicExtractor()
+            entry["주제"] = extractor.extract_topic(entry["기사 제목"], entry["문단"])
 
+            if (entry["주제"] == Modifier.normalize_text(entry["기사 제목"])):
+                temp_title.append(entry["기사 제목"])
 
             row = [entry.get(header, "") for header in headers]
             sheet.append(row)
@@ -316,14 +319,16 @@ def save_data_to_excel(data, excel_file):
             remaining_time = time_per_step * (total_entries - (i + 1))
             formatted_remaining_time = format_remaining_time(remaining_time)
 
-            print(f"[4단계 중 4단계] 주제 추출 및 엑셀 파일 저장 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
+            print(
+                f"[4단계 중 4단계] 주제 추출 및 엑셀 파일 저장 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
 
         workbook.save(excel_file)
         print(f"엑셀 파일이 '{excel_file}'로 저장되었습니다.")
     except Exception as e:
         print(f"주제 추출 및 엑셀 파일 저장 중 오류 발생: {e}")
         traceback.print_exc()  # 자세한 오류 정보를 출력
-        
+
+
 def save_data_to_csv(data, csv_file):
     """추출된 데이터를 CSV 파일로 저장."""
     if not data:
@@ -351,7 +356,7 @@ def save_data_to_csv(data, csv_file):
             entry["발언의 목적 배경 취지"] = prev_purpose = extract_purpose(
                 entry["발언자 성명 및 직책"], entry["기사 제목"], entry["문장"], entry["문단"], prev_purpose)
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언자 성명 및 직책"])
-            
+
             # entry["주제"] = extract_topic(entry["기사 제목"], entry["큰따옴표 발언"], entry["발언의 목적 배경 취지"], entry["발언자 성명 및 직책"], prev_topic)
             # entry["주제"] = "test"
             entry["주제"] = Modifier.modify_title(entry["기사 제목"])
@@ -364,7 +369,8 @@ def save_data_to_csv(data, csv_file):
             remaining_time = time_per_step * (total_entries - (i + 1))
             formatted_remaining_time = format_remaining_time(remaining_time)
 
-            print(f"[4단계 중 4단계] 주제 추출 및 CSV 파일 저장 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
+            print(
+                f"[4단계 중 4단계] 주제 추출 및 CSV 파일 저장 중: {i + 1}/{total_entries} - 남은 예상 시간: {formatted_remaining_time}")
 
         # DataFrame 생성 및 저장
         df = pd.DataFrame(data)
@@ -384,17 +390,17 @@ def process_file(csv_file, output_excel_file, output_csv_file):
     try:
         # 1. CSV에서 텍스트 추출
         extracted_data = extract_text_from_csv(csv_file)
-        
+
         # 2. 데이터 병합
         merged_data = merge_data(extracted_data)
-        
+
         # 3. 중복 제거
         cleaned_data = remove_duplicates(merged_data)
-        
+
         # 4. 엑셀로 저장
         save_data_to_excel(cleaned_data, output_excel_file)
         # save_data_to_csv(cleaned_data, output_csv_file)
-        
+
         print(f"처리 완료: {csv_file} -> {output_excel_file}")
     except Exception as e:
         print(f"{csv_file} 처리 중 오류 발생: {e}")
@@ -418,9 +424,11 @@ def process_multiple_files(directory_path, output_dir):
 
     for csv_file in tqdm(csv_files, desc="파일 처리 중", unit="file"):
         formatted_date = datetime.datetime.now().strftime('%y%m%d')
-        output_excel_file = os.path.join(output_dir, f"{os.path.basename(csv_file).replace('.csv', f'_AI변환_{formatted_date}.xlsx')}")
-        output_csv_file = os.path.join(output_dir, f"{os.path.basename(csv_file).replace('.csv', f'_AI변환_{formatted_date}.csv')}")
-        
+        output_excel_file = os.path.join(
+            output_dir, f"{os.path.basename(csv_file).replace('.csv', f'_AI변환_{formatted_date}.xlsx')}")
+        output_csv_file = os.path.join(
+            output_dir, f"{os.path.basename(csv_file).replace('.csv', f'_AI변환_{formatted_date}.csv')}")
+
         process_file(csv_file, output_excel_file, output_csv_file)
 
 
@@ -428,10 +436,11 @@ def process_multiple_files(directory_path, output_dir):
 if __name__ == "__main__":
     formatted_date = datetime.datetime.now().strftime('%y%m%d')
     directory_path = "/Users/gichanpark/Downloads/Input Sample Files"  # CSV 파일들이 위치한 디렉토리
-    output_dir = f"/Users/gichanpark/Downloads/output_{formatted_date}"  # 출력 엑셀 파일이 저장될 디렉토리
+    # 출력 엑셀 파일이 저장될 디렉토리
+    output_dir = f"/Users/gichanpark/Downloads/output_{formatted_date}"
 
     process_multiple_files(directory_path, output_dir)
-    
+
     # unique_title = list(set(temp_title))
     # for title in unique_title:
     #     print(title)
