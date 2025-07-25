@@ -1,4 +1,2 @@
 
-                    #     # 끝 글자가 같은 경우는 교체하지 않음
-                    #     # ex) 남자<->여자, 포유류<->양서류 등
-                    #     continue
+    # topic = extractor.extract_topic(title, body3)

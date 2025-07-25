@@ -1,5 +1,6 @@
 import re
 from text_manager import nlp
+from transformers import pipeline
 
 # 2. 토씨 또는 어미의 조정
 replace_dict = {
@@ -283,6 +284,24 @@ def simplify_purpose(sentence, name):
         
     return sentence
 
+class Paraphraser:
+    # 모델 이름 설정
+    model_name = "psyche/KoT5-paraphrase-generation"
+
+    # pipeline을 사용하여 모델과 토크나이저 불러오기
+    generator = pipeline("text2text-generation",
+                         model=model_name, device=0)  # device=0은 GPU 사용 시
+
+    @classmethod
+    def generate(cls, prompt, max_tokens=128):
+        # 텍스트 생성
+        # result = cls.generator(prompt, max_length=512, num_return_sequences=1, max_new_tokens=max_tokens)
+        result = cls.generator(prompt, max_length=512, num_return_sequences=1)
+        # print(result)
+
+        # 생성된 텍스트 반환
+        return result[0]['generated_text']
+
 
 def extract_purpose(name=None, title=None, body1=None, body2=None, prev=None):
     # 1. 기본적으로 큰따옴표의 전 후에 있는 문구를 그대로 옮겨 쓰되 아래의 조정이 필요
@@ -301,10 +320,13 @@ def extract_purpose(name=None, title=None, body1=None, body2=None, prev=None):
     # 9. 문장 서두의 [이에, 이에 대해] 는 1안) 쓰지 않거나,  2안) 앞 문장에서 '이에 대해' 에 해당되는 내용을 찾아서 씀
     excluded_text = exclude_conjunctions(adjusted_text)
     # print("3단계: " + excluded_text)
+    
+    paraphraser = Paraphraser()
+    paraphrased = paraphraser.generate(excluded_text)
 
     # 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
     # 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
-    simplified_text = simplify_purpose(excluded_text, name)
+    simplified_text = simplify_purpose(paraphrased, name)
     # print("목적배경취지: " + simplified_text)
 
     return simplified_text
