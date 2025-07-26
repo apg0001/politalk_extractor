@@ -28,7 +28,17 @@ unimportant_conjunctions = [
     # 4
     "이어",
     "그러므로",
-    "또"]
+    "또",
+    
+    
+    # 발언 정리 진행방향 제안
+    "그러나",
+    "그러자",
+    "그러면서",
+    "이어서",
+    "다만",
+    "아울러"
+    ]
 
 # 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
 # 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
@@ -284,23 +294,30 @@ def simplify_purpose(sentence, name):
         
     return sentence
 
-class Paraphraser:
-    # 모델 이름 설정
-    model_name = "psyche/KoT5-paraphrase-generation"
+class MediaMentionCleaner:
+    def __init__(self):
+        self.media_names = [
+            "본지", "중앙일보", "조선일보", "동아일보", "세계일보",
+            "MBC", "KBS", "SBS", "JTBC", "채널A", "TV조선", "연합뉴스"
+        ]
 
-    # pipeline을 사용하여 모델과 토크나이저 불러오기
-    generator = pipeline("text2text-generation",
-                         model=model_name, device=0)  # device=0은 GPU 사용 시
+        # 정규식 패턴들
+        self.patterns = [
+            # 조선일보 유튜브 '배성규의 정치펀치'
+            r"(조선일보\s+유튜브\s+[‘\"']?\s*배성규의\s+정치펀치\s*[’\"']?)",
+            # 언론사 + 연결어 + 맥락 표현
+            rf"({'|'.join(self.media_names)})\s*(유튜브)?\s*([와과]의|[와과]|의)?\s*[\w\s]*?(통화|인터뷰|방송|만남|출연|강조|만난)?\s*(에서|에|당시)?",
+            # 단독 언론사 이름만 나올 경우
+            rf"({'|'.join(self.media_names)})"
+        ]
 
-    @classmethod
-    def generate(cls, prompt, max_tokens=128):
-        # 텍스트 생성
-        # result = cls.generator(prompt, max_length=512, num_return_sequences=1, max_new_tokens=max_tokens)
-        result = cls.generator(prompt, max_length=512, num_return_sequences=1)
-        # print(result)
-
-        # 생성된 텍스트 반환
-        return result[0]['generated_text']
+    def clean(self, text: str) -> str:
+        for pattern in self.patterns:
+            text = re.sub(pattern, "", text)
+        # 후처리: 조사 혼자 남은 것 제거
+        text = re.sub(r"\s+(에서|에|와의|와|의)\s+", " ", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        return text.strip()
 
 
 def extract_purpose(name=None, title=None, body1=None, body2=None, prev=None):
@@ -321,12 +338,12 @@ def extract_purpose(name=None, title=None, body1=None, body2=None, prev=None):
     excluded_text = exclude_conjunctions(adjusted_text)
     # print("3단계: " + excluded_text)
     
-    paraphraser = Paraphraser()
-    paraphrased = paraphraser.generate(excluded_text)
+    cleaner = MediaMentionCleaner()
+    cleaned = cleaner.erase(excluded_text)
 
     # 6. OOO 의원은 "….." 고 했다, 말했다  --> OOO 의원의 발언
     # 7. OOO 의원은 "….." 고 비판, 주장, 비난, 반박했다 등  --> OOO 의원의 비판, 주장, 비난, 반박 등
-    simplified_text = simplify_purpose(paraphrased, name)
+    simplified_text = simplify_purpose(cleaned, name)
     # print("목적배경취지: " + simplified_text)
 
     return simplified_text
